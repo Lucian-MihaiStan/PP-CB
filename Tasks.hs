@@ -491,36 +491,42 @@ instance FEval String where
     feval list_of_strings (Gt str string) = \row -> row !! get_column_index str [list_of_strings] > string
     feval list_of_strings (FNot (Eq str string)) = \row -> row !! get_column_index str [list_of_strings] /= string
     feval list_of_strings (FieldEq field1 field2) = \row ->
-        (row !! (get_column_index field1 [list_of_strings]) == "" && row !! (get_column_index field2 [list_of_strings]) == "") || (if (row !! (get_column_index field1 [list_of_strings]) /= "" && row !! (get_column_index field2 [list_of_strings]) == "") then False
+        (row !! get_column_index field1 [list_of_strings] == "" && row !! get_column_index field2 [list_of_strings] == "") || (if (row !! (get_column_index field1 [list_of_strings]) /= "" && row !! (get_column_index field2 [list_of_strings]) == "") then False
                                                                                                                               else if (row !! (get_column_index field1 [list_of_strings]) == "" && row !! (get_column_index field2 [list_of_strings]) /= "") then False
                                                                                                                               else (read (row !! (get_column_index field1 [list_of_strings])) :: Float) == (read (row !! (get_column_index field2 [list_of_strings])) :: Float))
 
 
-dist :: Eq a => [a] -> [a] -> Integer
-dist a b = last (if lab == 0 then mainDiag else if lab > 0 then lowers !! (lab - 1) else uppers !! (-1 - lab))
+dist :: (Num a1, Ord a1, Eq a2) => [a2] -> [a2] -> a1
+dist str1 str2 = last (
+            if (length str1 - length str2) == 0 then p_diag 
+            else 
+                if (length str1 - length str2) > 0 then l_diags !! ((length str1 - length str2) - 1) 
+                else u_diags !! (-1 - (length str1 - length str2))
+        )
     where
-        uppers = eachDiag a b (mainDiag : uppers)
-        lowers = eachDiag b a (mainDiag : lowers)
-        mainDiag = oneDiag a b (head uppers) (-1 : head lowers)
-        eachDiag a [] diags = []
-        eachDiag a (bch:bs) (lastDiag:diags) = oneDiag a bs nextDiag lastDiag : eachDiag a bs diags
-            where 
-                nextDiag = head (tail diags)
-        oneDiag a b diagAbove diagBelow = thisdiag
-            where 
-                doDiag [] b nw n w = []
-                doDiag (ach:as) (bch:bs) nw n w = me : (doDiag as bs me (tail n) (tail w))
-                    where 
-                        me = if ach == bch then nw else 1 + min3 (head w) nw (head n)
-                firstelt = 1 + head diagBelow
-                thisdiag = firstelt : doDiag a b firstelt diagAbove (tail diagBelow)
-        lab = length a - length b
-        min3 x y z = if x < y then x else min y z
+        for_each_diag a [] diags = []
+        for_each_diag a (y:ys) (last_diag:diags) = (calculate_diag a ys (head (tail diags)) last_diag) : for_each_diag a ys diags
+        calculate_diag a b diag_top diag_low = (1 + head diag_low) : (complete_diag a b (1 + head diag_low) diag_top (tail diag_low))
+        complete_diag [] b nw n w = []
+        complete_diag (x:xs) (y:ys) nw n w = (
+                    if x == y then nw 
+                    else 1 + (if (head w) < nw then (head w) else min nw (head n))
+                ) : (
+                    complete_diag xs ys (
+                            if x == y then nw 
+                            else 1 + (if (head w) < nw then (head w) else min nw (head n))
+                        ) (tail n) (tail w)
+                )
+        u_diags = for_each_diag str1 str2 (p_diag : u_diags)
+        l_diags = for_each_diag str2 str1 (p_diag : l_diags)
+        p_diag  = calculate_diag str1 str2 (head u_diags) (-1 : head l_diags)
+        
 
-
+best_match :: (Foldable t, Eq a) => t [a] -> [a] -> [Int]
 best_match col el = elemIndices (minimum $ foldr (check el) [] col) (reverse $ foldr (check el) [] col)
     where check el1 el2 acc2 = acc2 ++ [(dist el1 el2)]
                 
+get_best_element :: Eq a => [[a]] -> [a] -> [[a]] -> [[a]]
 get_best_element column_ref element acc = acc ++ [(column_ref !! ((best_match column_ref element) !! 0))]
 
 
